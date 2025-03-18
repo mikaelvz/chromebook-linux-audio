@@ -8,8 +8,8 @@ from functions import *
 # parse arguments from the cli. Only for testing/advanced use.
 def process_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-b", dest="board_name", type=str, nargs=1, default=[""],
-                        help="Override board name.")
+    parser.add_argument("--platform", dest="platform_name", type=str, nargs=1, default=[""],
+                        help="Override platform name.")
     parser.add_argument("--enable-debug", action='store_const', const="Enabling", dest="debug",
                         help="Enable audio debugging.")
     parser.add_argument("--disable-debug", action='store_const', const="Disabling", dest="debug",
@@ -38,7 +38,11 @@ if __name__ == "__main__":
     mkdir("/etc/modprobe.d", create_parents=True)
 
     # Platform specific configuration
-    platform = get_platform()
+    if args.platform_name[0] == "":
+        platform = get_platform()
+    else:
+        platform = args.platform_name[0]
+
     platform_config(platform, args)
 
     # Install downstream UCM configuration
