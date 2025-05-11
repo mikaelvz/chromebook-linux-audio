@@ -160,7 +160,7 @@ def platform_config(platform, args):
             mdn_config()
 
 def get_platform():
-    # first check if we are on a chromeb{ook,ox,ase,let} (either sys_vendor or board_vendor includes "google" (case-insensitive for old devices where it was GOOGLE))
+    # first check if we are on a chromeb{ook,ox,ase,let} (either sys_vendor or product_family includes "google" (case-insensitive for old devices where it was GOOGLE))
     # product_family *usually* will tell us the platform
     # some platforms (jsl, byt) dont have a product_family so instead check the id of pci device 00:00.0 (chipset/pch)
     # for some reason, cyan also doesnt have this set even though every other bsw board does
@@ -168,14 +168,11 @@ def get_platform():
     print_header("Detecting platform")
     platform = ""
     sv = ""
-    bv = ""
     pf = ""
     pn = ""
 
     with open("/sys/class/dmi/id/sys_vendor") as sys_vendor:
         sv = sys_vendor.read().strip().lower()
-    with open("/sys/class/dmi/id/board_vendor") as board_vendor:
-        bv = board_vendor.read().strip().lower()
     with open("/sys/class/dmi/id/product_family") as product_family:
         pf = product_family.read().strip().lower()
     with open("/sys/class/dmi/id/product_name") as product_name:
@@ -186,7 +183,7 @@ def get_platform():
         print_error("This script can not and will not do anything in the crostini vm!")
         exit(1)
 
-    if not "google" in sv and not "google" in bv:
+    if not "google" in sv and not "google" in pf:
         print_error("This script is not supported on non-Chrome devices!")
         exit(1)
 
@@ -267,8 +264,8 @@ def mdn_config():
     cpdir("blobs/mdn/tplg", "/lib/firmware/amd/sof-tplg")
 
 def st_warning():
-    print_warning("WARNING: Audio on AMD StoneyRidge Chromebooks will not work with the kernel provided by your distro as the audio driver requires a special kernel config that cannot be shipped in any distro. A custom kernel is required.")
-    print_warning("You can get a prebuilt kernel from https://nightly.link/chrultrabook/stoney-kernel/workflows/build/main/stoney-kernel.zip")
+    print_warning("WARNING: Audio on AMD StoneyRidge Chromebooks requires a patched kernel.")
+    print_warning("You can get a prebuilt kernel for Debian/Ubuntu/Fedora from https://chrultrabook.sakamoto.pl/stoneyridge-kernel/")
 
 
 def avs_config(args):
@@ -323,8 +320,10 @@ def adl_sof_config():
         tplg_path="/lib/firmware/intel/sof-tplg"
         if path_exists(f"{tplg_path}/sof-adl-{tplg}.tplg"):
             bash(f"ln -sf {tplg_path}/sof-adl-{tplg}.tplg {tplg_path}/sof-rpl-{tplg}.tplg")
-            if path_exists(f"{tplg_path}/sof-adl-{tplg}.tplg.xz"):
-                bash(f"ln -sf {tplg_path}/sof-adl-{tplg}.tplg.xz {tplg_path}/sof-rpl-{tplg}.tplg.xz")
+        if path_exists(f"{tplg_path}/sof-adl-{tplg}.tplg.xz"):
+            bash(f"ln -sf {tplg_path}/sof-adl-{tplg}.tplg.xz {tplg_path}/sof-rpl-{tplg}.tplg.xz")
+        if path_exists(f"{tplg_path}/sof-adl-{tplg}.tplg.zst"):
+            bash(f"ln -sf {tplg_path}/sof-adl-{tplg}.tplg.zst {tplg_path}/sof-rpl-{tplg}.tplg.zst")
     # sof-adl-max98360a-cs42l42.tplg is symlinked to sof-adl-max98360a-rt5682.tplg in ChromeOS
     tplg_file1="/lib/firmware/intel/sof-tplg/sof-adl-max98360a-rt5682.tplg"
     tplg_file2="/lib/firmware/intel/sof-tplg/sof-adl-max98360a-cs42l42.tplg"
@@ -332,6 +331,8 @@ def adl_sof_config():
         bash(f"ln -sf {tplg_file1} {tplg_file2}")
     if path_exists(f"{tplg_file1}.xz"):
         bash(f"ln -sf {tplg_file1}.xz {tplg_file2}.xz")
+    if path_exists(f"{tplg_file1}.zst"):
+        bash(f"ln -sf {tplg_file1}.xz {tplg_file2}.zst")
 
 def mtl_sof_config():
     print_header("Enabling SOF driver")
@@ -412,7 +413,7 @@ def check_kernel_config(platform):
             case "max98927":
                 module_configs.append("SND_SOC_MAX98927")
             case "max98390":
-                module_configs.append("SOC_SOC_MAX98390")
+                module_configs.append("SND_SOC_MAX98390")
             case "rt1011":
                 module_configs.append("SND_SOC_RT1011")
             case "rt1015":
