@@ -142,8 +142,7 @@ def install_package(arch_package: str = "", deb_package: str = "", rpm_package: 
 def platform_config(platform, args):
     match platform:
         case "bdw" | "byt" | "bsw":
-            hifi2_sof_config()
-            check_sof_fw()
+            sst_atom_config()
         case "skl" | "kbl" | "apl":
             avs_config(args)
         case "glk" | "cml" | "tgl" | "jsl":
@@ -183,7 +182,7 @@ def get_platform():
         print_error("This script can not and will not do anything in the crostini vm!")
         exit(1)
 
-    if not "google" in sv and not "google" in pf:
+    if not "google" in sv and not "google" in pf and not Path("/dev/cros_ec").exists():
         print_error("This script is not supported on non-Chrome devices!")
         exit(1)
 
@@ -207,6 +206,9 @@ def get_platform():
             case "google_hatch" | "google_puff":
                 print_status("Detected Intel Cometlake")
                 platform = "cml"
+            case "google_dedede":
+                print_status("Detected Intel Jasperlake")
+                platform = "jsl"
             case "google_volteer":
                 print_status("Detected Intel Tigerlake")
                 platform = "tgl"
@@ -251,8 +253,8 @@ def get_platform():
         if id == "0x0f00":
             print_status("Detected Intel Baytrail")
             return "byt"
-        # JSL special case - check if pci dev id is 0x4e22
-        if id == "0x4e22":
+        # JSL special case - check if pci dev id is 0x4e22 or 0x4e12 or 0x4e26
+        if id == "0x4e22" or id == "0x4e12" or id == "0x4e26":
             print_status("Detected Intel Jasperlake")
             return "jsl"
 
@@ -266,6 +268,7 @@ def mdn_config():
 def st_warning():
     print_warning("WARNING: Audio on AMD StoneyRidge Chromebooks requires a patched kernel.")
     print_warning("You can get a prebuilt kernel for Debian/Ubuntu/Fedora from https://chrultrabook.sakamoto.pl/stoneyridge-kernel/")
+    print_warning("For other distros, a patch file is included in that same link, under the patches directory.")
 
 
 def avs_config(args):
@@ -291,14 +294,6 @@ def avs_config(args):
                 print_error("Try again")
             override_avs = False
 
-    # avs tplg is from https://github.com/thesofproject/avs-topology-xml, but isn't packaged in distros yet
-    print_header("Installing topology")
-    mkdir("/tmp/avs_tplg")
-    avs_tplg_ver = "2024.02"
-    bash(f"tar xf ./blobs/avs-topology_{avs_tplg_ver}.tar.gz -C /tmp/avs_tplg")
-    mkdir("/lib/firmware/intel/avs", create_parents=True)
-    cpdir("/tmp/avs_tplg/avs-topology/lib/firmware/intel/avs", "/lib/firmware/intel/avs")
-
     print_header("Enabling AVS driver")
     cpfile("conf/avs/snd-avs.conf", "/etc/modprobe.d/snd-avs.conf")
 
@@ -311,40 +306,75 @@ def check_sof_fw():
         print_error("SOF firmware is missing, audio will not work!")
         print_error("Please install the SOF firmware package (usually sof-firmware) with your package manager")
 
+def symlink_tplg(path, tplg1, tplg2):
+    if path_exists(f"{path}/{tplg1}.tplg"):
+        bash(f"ln -sf {path}/{tplg1}.tplg {path}/{tplg2}.tplg")
+    if path_exists(f"{path}/{tplg1}.tplg.xz"):
+        bash(f"ln -sf {path}/{tplg1}.tplg.xz {path}/{tplg2}.tplg.xz")
+    if path_exists(f"{path}/{tplg1}.tplg.zst"):
+        bash(f"ln -sf {path}/{tplg1}.tplg.zst {path}/{tplg2}.tplg.zst")
+
+def install_downstream_tplg(tplg, dest):
+    if path_exists(f"{dest}"):
+        cpfile(f"{tplg}", f"{dest}")
+    if path_exists(f"{dest}.xz"):
+        bash(f"xz -c {tplg} > {dest}.xz")
+    if path_exists(f"{dest}.zst"):
+        bash(f"zstd {tplg} -o {dest}.zst")
+
 def adl_sof_config():
     # Special tplg cases
     # RPL devices load tplg with a different file name than ADL, despite being the exact same file as their ADL counterparts
     # sof-bin currently doesn't include these symlinks, so we create them ourselves
-    tplgs = ["cs35l41", "max98357a-rt5682-4ch", "max98357a-rt5682", "max98360a-cs42l42", "max98360a-nau8825", "max98360a-rt5682-2way", "max98360a-rt5682-4ch", "max98360a-rt5682", "max98373-nau8825", "max98390-rt5682", "max98390-ssp2-rt5682-ssp0", "nau8825", "rt1019-nau8825", "rt1019-rt5682", "rt5682", "rt711", "sdw-max98373-rt5682"]
+    tplgs = ["cs35l41", "max98357a-rt5682-4ch", "max98357a-rt5682", "max98360a-cs42l42", "max98360a-da7219", "max98360a-nau8825", "max98360a-rt5682-2way", "max98360a-rt5682-4ch", "max98360a-rt5682", "max98373-nau8825", "max98390-rt5682", "max98390-ssp2-rt5682-ssp0", "nau8825", "rt1019-nau8825", "rt1019-rt5682", "rt5682", "rt711", "sdw-max98373-rt5682"]
     for tplg in tplgs:
-        tplg_path="/lib/firmware/intel/sof-tplg"
-        if path_exists(f"{tplg_path}/sof-adl-{tplg}.tplg"):
-            bash(f"ln -sf {tplg_path}/sof-adl-{tplg}.tplg {tplg_path}/sof-rpl-{tplg}.tplg")
-        if path_exists(f"{tplg_path}/sof-adl-{tplg}.tplg.xz"):
-            bash(f"ln -sf {tplg_path}/sof-adl-{tplg}.tplg.xz {tplg_path}/sof-rpl-{tplg}.tplg.xz")
-        if path_exists(f"{tplg_path}/sof-adl-{tplg}.tplg.zst"):
-            bash(f"ln -sf {tplg_path}/sof-adl-{tplg}.tplg.zst {tplg_path}/sof-rpl-{tplg}.tplg.zst")
+        symlink_tplg("/lib/firmware/intel/sof-tplg", f"sof-adl-{tplg}", f"sof-rpl-{tplg}")
     # sof-adl-max98360a-cs42l42.tplg is symlinked to sof-adl-max98360a-rt5682.tplg in ChromeOS
-    tplg_file1="/lib/firmware/intel/sof-tplg/sof-adl-max98360a-rt5682.tplg"
-    tplg_file2="/lib/firmware/intel/sof-tplg/sof-adl-max98360a-cs42l42.tplg"
-    if path_exists(f"{tplg_file1}"):
-        bash(f"ln -sf {tplg_file1} {tplg_file2}")
-    if path_exists(f"{tplg_file1}.xz"):
-        bash(f"ln -sf {tplg_file1}.xz {tplg_file2}.xz")
-    if path_exists(f"{tplg_file1}.zst"):
-        bash(f"ln -sf {tplg_file1}.xz {tplg_file2}.zst")
+    symlink_tplg("/lib/firmware/intel/sof-tplg", "sof-adl-max98360a-rt5682", "sof-adl-max98360a-cs42l42")
+    # upstream sof-adl-rt1019-rt5682 is broken currently
+    install_downstream_tplg("blobs/adl/sof-adl-rt1019-rt5682.tplg", "/lib/firmware/intel/sof-tplg/sof-adl-rt1019-rt5682.tplg")
 
 def mtl_sof_config():
     print_header("Enabling SOF driver")
     cpfile("conf/sof/mtl-sof.conf", "/etc/modprobe.d/mtl-sof.conf")
+    # upstream mtl tplgs are broken currently
+    install_downstream_tplg("blobs/mtl/sof-mtl-rt5650.tplg", "/lib/firmware/intel/sof-ace-tplg/sof-mtl-rt5650.tplg")
+    install_downstream_tplg("blobs/mtl/sof-mtl-rt1019-rt5682.tplg", "/lib/firmware/intel/sof-ace-tplg/sof-mtl-rt1019-rt5682.tplg")
 
-def hifi2_sof_config():
-    print_header("Forcing SOF driver in debug mode")
-    cpfile("conf/sof/hifi2-sof.conf", "/etc/modprobe.d/hifi2-sof.conf")
+def sst_atom_config():
+    print_status("There are two audio drivers available for your device: SST and SOF")
+    print_status("Try SST first. If SST doesn't work, try SOF instead.")
+
+    while True:
+        user_input = input("Which driver would you like to use? [sof/sst]: ")
+        if user_input.lower() == "sof":
+            print_status("Using sof")
+            # Remove sst modprobe config if it exists
+            rmfile("/etc/modprobe.d/snd-sst.conf")
+            # Install sof modprobe config
+            cpfile("conf/sof/hifi2-sof.conf", "/etc/modprobe.d/hifi2-sof.conf")
+            check_sof_fw()
+            break
+        elif user_input.lower() == "sst":
+            print_status("Using sst")
+            # Remove sof modprobe config if it exists
+            rmfile("/etc/modprobe.d/hifi2-sof.conf")
+            # Install sst modprobe config
+            cpfile("conf/common/snd-sst.conf", "/etc/modprobe.d/snd-sst.conf")
+            break
+        else:
+            print_error(f"Invalid option: {user_input}")
+            continue
 
 #######################################################################################
 #                                   GENERAL FUNCTIONS                                 #
 #######################################################################################
+def check_nix():
+    with open("/etc/os-release") as os:
+        if "ID=nixos" in os.read():
+            print_error("NixOS is not supported")
+            exit(1)
+
 def check_arch():
     # dmi doesnt exist on arm chromebooks
     if not path_exists("/sys/devices/virtual/dmi/id/"):
@@ -497,10 +527,20 @@ def install_ucm(branch):
     print_header("Installing UCM configuration")
     try:
         bash("rm -rf /tmp/alsa-ucm-conf-cros")
-        bash(f"git clone https://github.com/WeirdTreeThing/alsa-ucm-conf-cros -b {branch} /tmp/alsa-ucm-conf-cros")
+        bash(f"git clone --depth 1 https://github.com/WeirdTreeThing/alsa-ucm-conf-cros -b {branch} /tmp/alsa-ucm-conf-cros")
     except:
         print_error("Error: Failed to clone UCM repo")
         exit(1)
 
     cpdir("/tmp/alsa-ucm-conf-cros/ucm2", "/usr/share/alsa/ucm2/")
     cpdir("/tmp/alsa-ucm-conf-cros/overrides", "/usr/share/alsa/ucm2/conf.d")
+
+def check_os_release():
+    release = ""
+    with open("/etc/os-release", "r") as rel:
+        release = rel.read()
+    if "noble" in release or "jammy" in release or "plucky" in release:
+        print_error("Warning: Your distro is not officially supported. Expect Issues.")
+        print_error("Please try a supported distro first before opening an issue. See the README for a list of supported distros.")
+        return False
+    return True

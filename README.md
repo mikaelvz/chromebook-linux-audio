@@ -3,24 +3,24 @@
 <h4 align="center">Note: A full install of a supported Linux distro is required! Live USB sessions will not work.</h4>
 
 # Instructions
-1.     git clone https://github.com/WeirdTreeThing/chromebook-linux-audio
+1.     git clone --depth 1 https://github.com/WeirdTreeThing/chromebook-linux-audio
 2.     cd chromebook-linux-audio
 3.     ./setup-audio
 
 # Requirements
-1. `python 3.10`
+1. `python 3.10 or newer`
 2. `git`
 
 # Supported Devices
-See the [Chrultrabook docs](https://docs.chrultrabook.com/docs/firmware/supported-devices.html) for more info.
+See the [Chrultrabook docs](https://docs.chrultrabook.com/docs/devices.html) for more info.
 
 # Officially Supported Distros
 1. Alpine Linux edge
 2. Arch Linux
-3. Debian Testing
-4. Fedora 41
+3. Debian Trixie
+4. Fedora 42
 5. OpenSUSE Tumbleweed
-6. Ubuntu 24.10
+6. Ubuntu 25.10
 7. Void Linux
 
 # Other Distros
