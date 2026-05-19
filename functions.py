@@ -266,8 +266,9 @@ def mdn_config():
     cpdir("blobs/mdn/tplg", "/lib/firmware/amd/sof-tplg")
 
 def st_warning():
-    print_warning("WARNING: Audio on AMD StoneyRidge Chromebooks requires a patched kernel.")
-    print_warning("You can get a prebuilt kernel for Debian/Ubuntu/Fedora from https://chrultrabook.sakamoto.pl/stoneyridge-kernel/")
+    print_warning("WARNING: Audio on AMD StoneyRidge Chromebooks requires a patched kernel for versions <6.19")
+    print_warning("Linux 6.19 and newer have all of the patches for stoney Chromebooks. If your distro packages Linux 6.19, please use that kernel.")
+    print_warning("You can get a prebuilt patched kernel for Debian/Ubuntu/Fedora from https://chrultrabook.sakamoto.pl/stoneyridge-kernel/")
     print_warning("For other distros, a patch file is included in that same link, under the patches directory.")
 
 
@@ -302,6 +303,14 @@ def avs_config(args):
         rmfile("/lib/firmware/intel/avs/max98357a-tplg.bin")
 
 def check_sof_fw():
+    # Certain devices (only HP?) set the system vendor to not Google on stock firmware, which breaks chromebook detection in the dspcfg driver. If this is the case, force the sof driver.
+    sv = ""
+    with open("/sys/class/dmi/id/sys_vendor") as sys_vendor:
+        sv = sys_vendor.read().strip().lower()
+    if not sv == "google":
+        print_header("Enabling SOF driver")
+        cpfile("conf/sof/snd-sof.conf", "/etc/modprobe.d/snd-sof.conf")
+
     if not path_exists("/lib/firmware/intel/sof"):
         print_error("SOF firmware is missing, audio will not work!")
         print_error("Please install the SOF firmware package (usually sof-firmware) with your package manager")
@@ -336,7 +345,7 @@ def adl_sof_config():
 
 def mtl_sof_config():
     print_header("Enabling SOF driver")
-    cpfile("conf/sof/mtl-sof.conf", "/etc/modprobe.d/mtl-sof.conf")
+    cpfile("conf/sof/snd-sof.conf", "/etc/modprobe.d/snd-sof.conf")
     # upstream mtl tplgs are broken currently
     install_downstream_tplg("blobs/mtl/sof-mtl-rt5650.tplg", "/lib/firmware/intel/sof-ace-tplg/sof-mtl-rt5650.tplg")
     install_downstream_tplg("blobs/mtl/sof-mtl-rt1019-rt5682.tplg", "/lib/firmware/intel/sof-ace-tplg/sof-mtl-rt1019-rt5682.tplg")
@@ -426,7 +435,7 @@ def check_kernel_config(platform):
         case "mtl":
             module_configs += [""] # TODO: fill this out
         case "st":
-            module_configs += ["SND_SOC_AMD_ACP", "SND_SOC_AMD_CZ_DA7219MX98357_MACH"]
+            module_configs += ["SND_SOC_AMD_ACP", "SND_SOC_AMD_CZ_DA7219MX98357_MACH", "SND_DESIGNWARE_I2S"]
         case "pco":
             module_configs += ["SND_SOC_AMD_ACP3x", "SND_SOC_AMD_RV_RT5682_MACH"]
         case "czn":
